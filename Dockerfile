@@ -1,9 +1,9 @@
-FROM python:3.12-slim
+FROM python:3.12-alpine
 
 WORKDIR /app
 
-RUN groupadd --gid 10001 appuser \
-    && useradd --uid 10001 --gid appuser --no-create-home appuser
+RUN addgroup -g 10001 appuser \
+    && adduser -D -H -u 10001 -G appuser appuser
 
 COPY app/app.py ./app.py
 

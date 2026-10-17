@@ -9,8 +9,6 @@ Your mission is to build a secure delivery pipeline, implement a GitOps deployme
 **Rules:**
 - Everything should be done using free/open-source tools running locally (e.g., Minikube, Kind, K3d). No cloud accounts are required.
 - Security controls are currently enforced **only** in the CI/CD pipeline. 
-- Provide clear documentation on your setup, architecture, and instructions to reproduce your environment.
-
 ---
 
 ## Task 1: Dockerization & Secure CI/CD Pipeline
