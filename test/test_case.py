@@ -32,7 +32,7 @@ run_server = app.run_server
 # ──────────────────────────────────────────────
 @pytest.fixture(scope="module")
 def test_server():
-    """Start the app's HTTP server on a random free port for the test session."""
+    """Start the HTTP server on a random free port."""
     server = HTTPServer(("127.0.0.1", 0), HealthCheckHandler)
     port = server.server_address[1]
 
