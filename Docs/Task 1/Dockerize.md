@@ -8,16 +8,6 @@ Package the Python application in a small container that runs as a non-root user
 
 Place `Dockerfile` in the project root, beside `readme.md`.
 
-```dockerfile# Task 1.1: Dockerizing the Application
-
-## Objective
-
-Package the Python application in a small container that runs as a non-root user.
-
-## Dockerfile
-
-Place `Dockerfile` in the project root, beside `readme.md`.
-
 ```dockerfile
 FROM python:3.12-alpine
 
