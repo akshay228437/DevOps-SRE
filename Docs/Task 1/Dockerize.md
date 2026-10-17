@@ -8,13 +8,23 @@ Package the Python application in a small container that runs as a non-root user
 
 Place `Dockerfile` in the project root, beside `readme.md`.
 
+```dockerfile# Task 1.1: Dockerizing the Application
+
+## Objective
+
+Package the Python application in a small container that runs as a non-root user.
+
+## Dockerfile
+
+Place `Dockerfile` in the project root, beside `readme.md`.
+
 ```dockerfile
-FROM python:3.12-slim
+FROM python:3.12-alpine
 
 WORKDIR /app
 
-RUN groupadd --gid 10001 appuser \
-    && useradd --uid 10001 --gid appuser --no-create-home appuser
+RUN addgroup -g 10001 appuser \
+    && adduser -D -H -u 10001 -G appuser appuser
 
 COPY app/app.py ./app.py
 
@@ -27,10 +37,11 @@ CMD ["python", "app.py"]
 
 ## Design Choices
 
-- Used a slim Python base image to reduce image size.
-- Installed no additional packages because the application uses Python’s standard library.
+- Used an Alpine-based Python image for a small runtime footprint.
+- Selected Alpine after Trivy reported HIGH vulnerabilities in the previous Debian-based image. The Alpine image must also be scanned.
+- Installed no additional Python packages because the application uses Python’s standard library.
 - Copied only the application code into the image.
-- Configured a non-root user with UID and GID `10001`.
+- Created a non-root user with UID and GID `10001` using Alpine’s `addgroup` and `adduser` commands.
 - Documented port `8080` and configured Python as the startup process.
 
 ## Build and Run
@@ -38,7 +49,7 @@ CMD ["python", "app.py"]
 Run from the project root:
 
 ```powershell
-docker build -t memory-app:local .
+docker build --pull -t memory-app:local .
 docker run -d --name memory-app-check -p 8080:8080 --memory=400m --memory-swap=400m memory-app:local
 ```
 
@@ -77,6 +88,22 @@ Remove the test container:
 docker rm -f memory-app-check
 ```
 
+## Local Vulnerability Scan
+
+Export the image and scan it using Trivy:
+
+```powershell
+docker save -o memory-app.tar memory-app:local
+
+docker run --rm -v "${PWD}:/scan:ro" aquasec/trivy:latest image --input /scan/memory-app.tar --scanners vuln --severity HIGH,CRITICAL --exit-code 1
+```
+
+Review the scan output for vulnerabilities or scanner errors. Remove the exported file afterward:
+
+```powershell
+Remove-Item memory-app.tar
+```
+
 ## Validation Status
 
-The Dockerfile and verification commands were reviewed. Successful build, health check, non-root execution, and OOM termination must be confirmed from local command output.
+The local Dockerfile uses Alpine. Successful build, health check, non-root execution, OOM termination, and vulnerability scan results remain to be confirmed from command output.
