@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: memory-app
+  namespace: memory-app
+spec:
+  type: ClusterIP
+  sessionAffinity: None
+  selector:
+    app.kubernetes.io/name: memory-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+
