@@ -25,7 +25,7 @@ spec:
       labels:
         app.kubernetes.io/name: memory-app
         app.kubernetes.io/instance: memory-app-py313
-        app.kubernetes.io/version: "py3.13-sha-f1d12abd9ff4446cba5999ec973c497c2fc7d011"
+        app.kubernetes.io/version: "py3.13-sha-e37c4d4827275ff082c5ec6c7ae80cce7d2bf098"
     spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 10
@@ -44,7 +44,7 @@ spec:
               app.kubernetes.io/name: memory-app
       containers:
         - name: memory-app
-          image: ghcr.io/akshay228437/devops-sre:py3.13-sha-f1d12abd9ff4446cba5999ec973c497c2fc7d011
+          image: ghcr.io/akshay228437/devops-sre:py3.13-sha-e37c4d4827275ff082c5ec6c7ae80cce7d2bf098
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
