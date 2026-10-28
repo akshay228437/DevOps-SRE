@@ -67,7 +67,7 @@ version label in each of the three Deployment manifests. The script validates
 all three files before writing and rejects malformed commit SHAs.
 
 `peter-evans/create-pull-request` commits only `k8s/deployment-*.yaml` to
-`codex/update-images-<merged-commit-sha>` and creates a PR targeting `main`.
+`automation/update-images-<merged-commit-sha>` and creates a PR targeting `main`.
 Rerunning a release reuses its branch; unchanged tags produce no new commit.
 Different releases have separate PRs: review their source commits and avoid
 merging an older deployment PR after a newer one unless rolling back deliberately.
