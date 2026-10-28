@@ -1,0 +1,24 @@
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.coverage
+htmlcov/
+
+# Local environment settings
+.env
+.env.*
+!.env.example
+
+# Exported application images and local Trivy reports
+memory-app*.tar
+trivy-*.json
+trivy_envs.txt
+
+# Local editor and operating system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
