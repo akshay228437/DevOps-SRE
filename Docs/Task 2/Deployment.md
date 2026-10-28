@@ -88,7 +88,9 @@ selected Pod and does not validate Service load distribution across all Pods.
 ## Remaining task requirements
 
 ConfigMaps, Secrets, initContainers, dedicated ServiceAccounts and RBAC,
-NetworkPolicies, ResourceQuota, a restricted Argo CD AppProject, automatic sync,
-and automatic manifest image updates still need to be designed and implemented.
+NetworkPolicies, ResourceQuota, a restricted Argo CD AppProject, and automatic sync
+still need to be designed and implemented. Automatic image-tag update PRs are
+configured in the release workflow; GitHub permissions and end-to-end operation
+must be verified after merging the workflow changes.
 This initial deployment does not complete Task 2.
 

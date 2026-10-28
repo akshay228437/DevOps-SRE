@@ -72,3 +72,53 @@ jobs:
       - name: Show published image
         run: |
           echo "Published image: $IMAGE" >> "$GITHUB_STEP_SUMMARY"
+
+  update-manifests:
+    name: Open image update PR
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout deployment configuration
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Update all three image tags
+        env:
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: python3 scripts/update-image-tags.py --repository "$REPOSITORY" --sha "$RELEASE_SHA"
+
+      - name: Commit image tags and open PR
+        id: update-pr
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: main
+          branch: codex/update-images-${{ github.event.pull_request.merge_commit_sha }}
+          add-paths: k8s/deployment-*.yaml
+          commit-message: "chore: update application images to ${{ github.event.pull_request.merge_commit_sha }}"
+          title: "Deploy images from ${{ github.event.pull_request.merge_commit_sha }}"
+          body: |
+            Updates the Python 3.12, 3.13, and 3.14 Deployments to images published
+            from commit ${{ github.event.pull_request.merge_commit_sha }}.
+
+            All three release builds, vulnerability scans, and pushes completed successfully.
+            Review the image references and required checks before merging.
+            This manifest-only PR does not trigger another image release.
+
+      - name: Show image update PR
+        env:
+          PR_URL: ${{ steps.update-pr.outputs.pull-request-url }}
+        run: |
+          if [ -n "$PR_URL" ]; then
+            echo "Image update PR: $PR_URL" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No manifest changes; no new PR required." >> "$GITHUB_STEP_SUMMARY"
+          fi

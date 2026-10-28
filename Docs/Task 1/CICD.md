@@ -1,70 +1,101 @@
 # Task 1.2: Secure CI/CD Pipeline
 
-## Overview
-
-We use GitHub Actions to check pull requests and publish the application image after merging into `main`.
+## Delivery flow
 
 ```text
-Working branch -> Pull request -> CI checks -> Merge into main -> Build and publish to GHCR
+Application PR -> required checks -> merge into main
+  -> build, scan, and publish three Python images
+  -> bot commits image tags on a new branch and opens a deployment PR
+  -> approve workflow runs if GitHub requests it -> required checks -> review and merge
+  -> Argo CD sync (manual initially; automatic sync remains to be enabled)
 ```
 
-## Pull Request Checks
+## Pull request checks
 
 Workflow: [pr-checks.yml](../../.github/workflows/pr-checks.yml)
 
-Runs when a pull request targets `main`, including when new commits are pushed to that pull request.
+Every PR targeting `main` runs the checks, including manifest-only PRs.
+There is no PR path filter, so required checks are not left waiting by path exclusions.
 
-Four jobs run independently:
+- Flake8 runs once.
+- CodeQL runs once and uploads security findings.
+- pytest runs on Python 3.12, 3.13, and 3.14.
+- Docker builds and Trivy scans each Python Alpine image.
+- No application container smoke test is performed.
 
-| Job | Tool | Purpose |
-| --- | --- | --- |
-| Lint | Flake8 | Check Python formatting and basic coding mistakes |
-| Unit Tests | pytest | Run the tests in `test/` |
-| CodeQL | GitHub CodeQL | Scan Python code for security vulnerabilities |
-| Build and Scan Image | Docker and Trivy | Build the image and scan it for HIGH and CRITICAL vulnerabilities |
-
-The pipeline does not start the application container. Trivy returns a failure when it detects HIGH or CRITICAL vulnerabilities. CodeQL uploads findings to GitHub; merge protection must enforce the findings policy separately.
+Trivy fails on HIGH/CRITICAL findings except the explicit temporary exceptions in
+`.trivyignore`. Those exceptions suppress findings; they do not remediate them.
+CodeQL job success alone does not enforce zero findings; configure code scanning
+merge protection separately.
 
 ## Protecting main
 
-The GitHub protection settings used for this setup are:
+Require PRs and prevent bypasses. Require these status checks:
 
-- Require a pull request before merging into `main`.
-- Require `Lint`, `Unit Tests`, `CodeQL`, and `Build and Scan Image` to pass.
-- Prevent bypassing the protection rules.
-- Use a ruleset targeting `main` with **Require code scanning results**, selecting CodeQL and the desired alert thresholds.
+- `Lint`
+- `CodeQL`
+- `Unit Tests (Python 3.12)`
+- `Unit Tests (Python 3.13)`
+- `Unit Tests (Python 3.14)`
+- `Build and Scan Image (Python 3.12)`
+- `Build and Scan Image (Python 3.13)`
+- `Build and Scan Image (Python 3.14)`
 
-These settings are managed in GitHub, not in the workflow files. Their enforcement must be verified in the repository settings.
+Retain the CodeQL code-scanning results requirement as well. GitHub settings are
+external to this repository and must be verified there. Release jobs are not
+pre-merge requirements.
 
-## Release Pipeline
+## Release pipeline
 
 Workflow: [release.yml](../../.github/workflows/release.yml)
 
-The workflow listens for closed pull requests targeting `main`. Its release job runs only when the pull request was merged; closing without merging skips the job.
+The workflow handles closed PRs targeting `main`; the release job runs only for
+merged PRs. It skips PRs whose changed files are all under `k8s/`, `argocd/`,
+`Docs/`, or match `**/*.md`. A mixed PR with other changed files still releases.
 
-One job performs the following steps:
-
-1. Checks out the merged commit.
-2. Builds the Docker image.
-3. Logs in to GitHub Container Registry (GHCR).
-4. Pushes the image with a commit-based tag.
-5. Displays the published image reference in the workflow summary.
-
-Example image reference:
+The matrix checks out the merged commit and builds Python 3.12, 3.13, and 3.14
+images. Each image is scanned again before publishing because the build pulls
+fresh base images. Public GHCR images use tags such as:
 
 ```text
-ghcr.io/akshay228437/devops-sre:sha-<merged-commit-sha>
+ghcr.io/akshay228437/devops-sre:py3.12-sha-<merged-commit-sha>
 ```
 
-The release job contains no Trivy scan. Security scanning happens in the PR workflow.
+Only after every matrix job succeeds does `update-manifests` run. It checks out
+`main` and uses `scripts/update-image-tags.py` to update the image reference and
+version label in each of the three Deployment manifests. The script validates
+all three files before writing and rejects malformed commit SHAs.
 
-## Authentication
+`peter-evans/create-pull-request` commits only `k8s/deployment-*.yaml` to
+`codex/update-images-<merged-commit-sha>` and creates a PR targeting `main`.
+Rerunning a release reuses its branch; unchanged tags produce no new commit.
+Different releases have separate PRs: review their source commits and avoid
+merging an older deployment PR after a newer one unless rolling back deliberately.
 
-Publishing uses GitHub's automatic `GITHUB_TOKEN` with `packages: write` permission. No manually created token or Docker Hub credentials are needed.
+The bot does not merge the PR or bypass protection. The deployment PR changes
+only `k8s/`, so merging it does not publish images or create another update PR.
+PR checks still run independently.
 
-## Issues Resolved
+## GitHub setup and authentication
 
-- Fixed trailing spaces, blank-line spacing, and long lines reported by Flake8.
-- Changed the Docker base image from Debian-based Python slim to Python Alpine after Trivy reported HIGH vulnerabilities in Debian packages.
-- The PR workflow was reported as successful after the fixes.
+Publishing uses the built-in `GITHUB_TOKEN` with `packages: write`.
+The manifest-update job uses that token with `contents: write` and
+`pull-requests: write`; no PAT is configured.
 
+In Settings -> Actions -> General -> Workflow permissions, enable:
+**Allow GitHub Actions to create and approve pull requests**.
+This permits PR creation; the workflow does not approve or merge its own PR.
+Organization policy may control this setting.
+
+GitHub may require a user with write access to select **Approve workflows to run**
+on PRs created with `GITHUB_TOKEN`. If the bot PR's checks have not started,
+inspect its banner before waiting for required checks. See the current
+[GitHub token documentation](https://docs.github.com/en/actions/concepts/security/github_token).
+
+## Verification status
+
+The updater was exercised against copies of the current manifest content in
+memory: three image/label changes, idempotence, invalid input rejection, and
+failure before writing when a manifest is malformed. End-to-end bot PR creation,
+GitHub permissions, required checks, and AWS deployment need validation in GitHub
+and the cluster after merging these workflow changes.
