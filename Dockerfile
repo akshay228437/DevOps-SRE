@@ -1,4 +1,5 @@
-FROM python:3.12-alpine
+ARG PYTHON_VERSION=3.12
+FROM python:${PYTHON_VERSION}-alpine
 
 WORKDIR /app
 

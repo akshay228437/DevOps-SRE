@@ -1,0 +1,13 @@
+# Temporary exceptions requested on 2026-10-27 to continue the exercise.
+# Package locations and exploitability have not been verified.
+# Remove these exceptions after updating or removing the affected components.
+
+# msgpack 1.1.2; report lists fix in 1.2.1.
+GHSA-6v7p-g79w-8964
+
+# setuptools 70.3.0; report lists fix in 78.1.1.
+CVE-2025-47273
+
+# urllib3 2.7.0; report lists fixes in 2.8.0.
+CVE-2026-97687
+CVE-2026-97689
