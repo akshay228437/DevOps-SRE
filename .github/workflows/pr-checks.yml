@@ -3,6 +3,11 @@ name: PR Checks
 on:
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'k8s/**'
+      - 'argocd/**'
+      - 'Docs/**'
+      - '**/*.md'
 
 permissions:
   contents: read
