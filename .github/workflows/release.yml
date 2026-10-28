@@ -101,7 +101,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           base: main
-          branch: codex/update-images-${{ github.event.pull_request.merge_commit_sha }}
+          branch: automation/update-images-${{ github.event.pull_request.merge_commit_sha }}
           add-paths: k8s/deployment-*.yaml
           commit-message: "chore: update application images to ${{ github.event.pull_request.merge_commit_sha }}"
           title: "Deploy images from ${{ github.event.pull_request.merge_commit_sha }}"
