@@ -4,7 +4,7 @@
 
 # msgpack 1.1.2; report lists fix in 1.2.1.
 GHSA-6v7p-g79w-8964
-
+CVE-2026-114613
 # setuptools 70.3.0; report lists fix in 78.1.1.
 CVE-2025-47273
 
