@@ -4,7 +4,7 @@ metadata:
   name: memory-app
   namespace: argocd
 spec:
-  project: default
+  project: memory-app
   source:
     repoURL: https://github.com/akshay228437/DevOps-SRE.git
     targetRevision: main
@@ -12,7 +12,9 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: memory-app
-  # Leave automated sync disabled until the first deployment is verified.
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     syncOptions:
       - CreateNamespace=true

@@ -1,0 +1,41 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: memory-app
+  namespace: argocd
+spec:
+  description: Application delivery for the memory-app namespace
+  sourceRepos:
+    - https://github.com/akshay228437/DevOps-SRE.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: memory-app
+  # Required because k8s/ contains the application's Namespace manifest.
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ServiceAccount
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: ResourceQuota
+    - group: apps
+      kind: Deployment
+    - group: apps
+      kind: ReplicaSet
+    - group: ""
+      kind: Pod
+    - group: discovery.k8s.io
+      kind: EndpointSlice
+    - group: ""
+      kind: Endpoints
+    - group: rbac.authorization.k8s.io
+      kind: Role
+    - group: rbac.authorization.k8s.io
+      kind: RoleBinding
+    - group: networking.k8s.io
+      kind: NetworkPolicy

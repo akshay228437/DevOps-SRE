@@ -19,7 +19,9 @@ def update_images(root, repository, sha):
         tag = f"py{version}-sha-{sha}"
         image = f"ghcr.io/{repository.lower()}:{tag}"
         content, image_count = re.subn(
-            r"(?m)^(\s*)image:[^\r\n]*$",
+            r"(?m)^([ \t]*)image:[ \t]+ghcr\.io/[^\s]+:py"
+            + re.escape(version)
+            + r"-sha-[0-9a-f]{40}[ \t]*$",
             lambda match: f"{match[1]}image: {image}",
             original,
         )
