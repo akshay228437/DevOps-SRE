@@ -7,7 +7,7 @@ Application PR -> required checks -> merge into main
   -> build, scan, and publish three Python images
   -> bot commits image tags on a new branch and opens a deployment PR
   -> approve workflow runs if GitHub requests it -> required checks -> review and merge
-  -> Argo CD sync (manual initially; automatic sync remains to be enabled)
+  -> Argo CD automatically syncs the approved deployment changes
 ```
 
 ## Pull request checks
@@ -63,7 +63,9 @@ ghcr.io/akshay228437/devops-sre:py3.12-sha-<merged-commit-sha>
 
 Only after every matrix job succeeds does `update-manifests` run. It checks out
 `main` and uses `scripts/update-image-tags.py` to update the image reference and
-version label in each of the three Deployment manifests. The script validates
+version label in each of the three Deployment manifests. It matches only the
+GHCR Python application image and preserves the separate BusyBox init image.
+The script validates
 all three files before writing and rejects malformed commit SHAs.
 
 `peter-evans/create-pull-request` commits only `k8s/deployment-*.yaml` to

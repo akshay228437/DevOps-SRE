@@ -2,8 +2,10 @@
 
 ## Scope
 
-The flat `k8s/` directory contains a Namespace, three Deployments, and one
-shared ClusterIP Service. Argo CD will track this directory on `main`.
+The flat `k8s/` directory contains a Namespace, three Deployments, one shared
+ClusterIP Service, a ServiceAccount, runtime ConfigMap, BusyBox initContainers,
+support RBAC, NetworkPolicy,
+and ResourceQuota. Argo CD tracks this directory on `main`.
 
 Each Deployment runs one replica of the same application commit with Python
 3.12, 3.13, or 3.14. Images are public GHCR packages and need no image-pull secret.
@@ -50,22 +52,34 @@ kubectl apply --dry-run=server -f k8s/namespace.yaml
 Other resources require the namespace to exist for server validation.
 
 The Argo CD Application is defined in `argocd/application.yaml`, outside the
-tracked `k8s/` directory. It uses the existing `default` AppProject and manual
-sync for the first deployment. A restricted AppProject remains a follow-up.
+tracked `k8s/` directory. It uses the dedicated `memory-app` AppProject with
+automatic sync, pruning, and self-healing enabled. Bootstrap the project before
+switching the Application to it. The project permits only this repository,
+the in-cluster destination namespace, and listed resource kinds.
+
+The Namespace kind is a deliberate cluster-scoped exception because `k8s/`
+contains the Namespace manifest. This whitelist restricts kind, not Namespace
+object name; protect repository writes and review namespace changes. The
+AppProject does not reduce the underlying Argo CD controller's cluster RBAC.
+Secrets are not allowed by the project yet and will be addressed in the final step.
 
 After merging the manifests into `main`, run these commands from the repository
 root on the control-plane node, using a checkout containing the merged files:
 
 ```bash
+kubectl apply --dry-run=server -f argocd/project.yaml
+kubectl apply -f argocd/project.yaml
 kubectl apply --dry-run=server -f argocd/application.yaml
 kubectl apply -f argocd/application.yaml
 kubectl -n argocd get application memory-app
 ```
 
-In the Argo CD UI, open `memory-app`, review its resources, then select Sync.
+In the Argo CD UI, open `memory-app` and review its resources and sync status.
 The Application enables namespace creation. Do not manually apply the
-Deployments; Argo CD manages the initial deployment. Automatic sync will be
-configured after verification, as required by the assignment.
+Deployments; Argo CD manages deployment automatically. Pruning deletes tracked
+resources removed from Git, and self-healing corrects live drift from Git.
+Because the Application manifest is outside the tracked `k8s/` directory, apply
+changes to `argocd/application.yaml` explicitly; this Application does not manage itself.
 
 After syncing:
 
@@ -87,9 +101,12 @@ selected Pod and does not validate Service load distribution across all Pods.
 
 ## Remaining task requirements
 
-ConfigMaps, Secrets, initContainers, dedicated ServiceAccounts and RBAC,
-NetworkPolicies, ResourceQuota, a restricted Argo CD AppProject, and automatic sync
-still need to be designed and implemented. Automatic image-tag update PRs are
+Secret design and implementation are deliberately deferred until after Task 3.
+The runtime ConfigMap and BusyBox initContainers are configured without changing
+application source code or adding test files.
+Support RBAC and the dedicated AppProject are configured locally; validate their
+behavior after GitOps sync.
+Automatic image-tag update PRs are
 configured in the release workflow; GitHub permissions and end-to-end operation
 must be verified after merging the workflow changes.
 This initial deployment does not complete Task 2.
