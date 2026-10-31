@@ -43,22 +43,3 @@ Application PR -> GitHub Actions -> GHCR images -> deployment PR
 Nodes and Pod metrics -> Prometheus -> Grafana dashboards and alerts
 Application logs -> Alloy -> Loki -> Grafana Explore
 ~~~
-
-## Submission notes
-
-The assignment asks for tools running on a local cluster. This demonstration
-uses AWS EC2, so it needs evaluator acceptance or a repeat deployment on a
-local cluster. The repository does not provision the cluster itself.
-
-Temporary Trivy exceptions remain in .trivyignore. Disclose these exceptions;
-they suppress findings rather than fix vulnerabilities.
-
-Use the [submission checklist](Docs/Submission.md) for the final deployment
-and evidence checks.
-
-## Current verification
-
-Node and Pod metrics and application logs were verified in Grafana.
-Both alert rules were saved; confirm their Firing states during failures.
-The new Secret references require creating the Secret before GitOps sync.
-The Docker health check requires rebuilding the image and checking its status.
