@@ -1,47 +1,32 @@
-# Task 2: Namespace ResourceQuota
+# Task 2: ResourceQuota
 
-`k8s/resourcequota.yaml` caps the aggregate resources admitted in the
-`memory-app` namespace. It does not reserve node capacity or change individual
-container limits. Each application container retains its 400Mi memory limit.
+The **memory-app-quota** limits total resources in the memory-app namespace.
 
-| Resource | Three application Pods | Six application Pods | Namespace quota |
-| --- | --- | --- | --- |
-| Pods | 3 | 6 | 6 |
-| CPU requests | 300m | 600m | 1 CPU |
-| Memory requests | 384Mi | 768Mi | 1Gi |
-| CPU limits | 1500m | 3000m | 3 CPUs |
-| Memory limits | 1200Mi | 2400Mi | 3Gi |
+| Resource | Three app Pods | Namespace quota |
+| --- | --- | --- |
+| Pods | 3 | 6 |
+| CPU requests | 300m | 1 CPU |
+| Memory requests | 384Mi | 1Gi |
+| CPU limits | 1500m | 3 CPUs |
+| Memory limits | 1200Mi | 3Gi |
 
-Each Deployment allows one surge Pod. Six Pods cover the desired three plus
-three rollout surge Pods. Terminating Pods can still consume quota temporarily,
-so additional creation may wait until those Pods finish. The six-Pod ceiling
-also applies to debug Pods and Jobs in this namespace. The sequential BusyBox
-initContainer requests 25m CPU/32Mi and is limited to 100m CPU/64Mi. Those values
-are below the application resources, so effective Pod requests/limits and the
-table above remain unchanged. Review future initContainers or sidecars separately.
+Each Deployment allows one extra Pod during a rolling update. The quota permits
+up to six app Pods, although terminating Pods can temporarily delay creation.
+Debug Pods also count toward the quota.
 
-The two workers each have 2 CPUs and approximately 3.64Gi allocatable memory.
-Argo CD, networking, system workloads, and future monitoring share this capacity.
-Quota acceptance does not guarantee enough free node resources for scheduling.
-Check allocated requests with `kubectl describe nodes` before expanding usage.
+The initContainers have lower resources than the app containers, so the table
+does not need extra initContainer resources. Container restarts reuse the same
+Pod and do not consume another Pod slot.
 
-With compute quotas enabled, new Pods must specify the corresponding CPU and
-memory requests and limits; the current application containers already do.
-Quota does not retroactively evict existing Pods. A rejected creation can appear
-as `FailedCreate` with an `exceeded quota` message on its ReplicaSet.
+Quota does not reserve node capacity or prevent OOM kills. Scheduling still
+depends on available node resources.
 
-## Deploy and verify
+## Verify
 
-Merge through a PR and allow Argo CD to sync. Then run:
-
-```bash
-kubectl -n memory-app get resourcequota
+~~~bash
 kubectl -n memory-app describe resourcequota memory-app-quota
 kubectl -n memory-app get deployments,pods
-```
+~~~
 
-Compare the Used and Hard columns. Container restarts caused by the intentional
-memory leak do not themselves create new Pods and do not add Pod quota usage.
-
-The manifest has not been applied to AWS by these local file changes. Cluster
-quota usage and rollout behavior still require verification after sync.
+Compare Used with Hard. If creation exceeds quota, inspect ReplicaSet events for
+FailedCreate or exceeded quota messages.

@@ -1,113 +1,110 @@
-# Task 2: Initial Kubernetes deployment
+# Task 2: Kubernetes and GitOps
 
-## Scope
+## Resources
 
-The flat `k8s/` directory contains a Namespace, three Deployments, one shared
-ClusterIP Service, a ServiceAccount, runtime ConfigMap, BusyBox initContainers,
-support RBAC, NetworkPolicy,
-and ResourceQuota. Argo CD tracks this directory on `main`.
+The k8s/ directory is managed by Argo CD and contains:
 
-Each Deployment runs one replica of the same application commit with Python
-3.12, 3.13, or 3.14. Images are public GHCR packages and need no image-pull secret.
-Commit-based tags identify the release; registry tags can still be overwritten.
-Digest pinning is a future hardening step.
+- Namespace: memory-app.
+- Three Deployments: memory-app-py312, memory-app-py313 and memory-app-py314.
+- One ClusterIP Service: port 80 forwards to container port 8080.
+- ConfigMap, initContainers, ServiceAccount, support RBAC, NetworkPolicy and ResourceQuota.
+- References to a Secret created separately on the cluster.
 
-## Resources and availability
+Each Deployment has one replica using a public GHCR image. No image-pull Secret
+is required. Each application container requests 100m CPU and 128Mi memory,
+with limits of 500m CPU and 400Mi memory.
 
-Each application container requests 100m CPU and 128Mi memory and is limited
-to 500m CPU and 400Mi memory. Three Pods request 300m CPU and 384Mi memory in
-total; their combined memory limits are 1200Mi. Rolling updates can temporarily
-create additional Pods. Capacity must also cover Kubernetes and Argo CD.
+The app intentionally consumes memory until it is OOMKilled. Kubernetes restarts
+it; repeated failures can cause CrashLoopBackOff. This is expected behavior.
 
-The memory leak remains intentional. The kernel enforces the container memory
-limit and can kill the process; the kubelet restarts the container in the same
-Pod. Repeated failures can produce restart backoff. The scheduler places Pods
-using requests; it does not perform OOM kills. The 128Mi request covers startup,
-not the application's growing steady-state consumption.
+Startup, readiness and liveness probes call /healthcheck. The Service routes
+to ready Pods. Each version has one replica, so its restarts can interrupt access
+to that version.
 
-Startup, readiness, and liveness probes call `/healthcheck`. This endpoint does
-not predict memory exhaustion. The Service sends connections to ready endpoints;
-an exact traffic split is not guaranteed. One replica per version cannot ensure
-continuous availability for that version during OOM restarts.
+Containers run as UID/GID 10001, without privilege escalation, with dropped
+capabilities, a read-only root filesystem and RuntimeDefault seccomp.
 
-A soft topology spread constraint encourages placement across workers without
-blocking scheduling. The existing control-plane taint is expected to keep these
-workloads off that node.
+## Argo CD
 
-## Container security
+[application.yaml](../../argocd/application.yaml) tracks this repository's main
+branch and k8s/ directory. Automatic sync deploys Git changes, self-heal corrects
+live drift, and prune removes tracked resources deleted from Git.
 
-Containers use UID/GID 10001, a read-only root filesystem, RuntimeDefault seccomp,
-no privilege escalation, and no Linux capabilities. Service account tokens are
-not mounted. These are workload settings; no admission enforcement is added.
+[project.yaml](../../argocd/project.yaml) limits the repository, destination and
+resource kinds Argo CD may manage. It does not limit manual kubectl access.
+Namespace is a cluster-scoped kind exception; its name is not restricted by that
+whitelist. Untracked resources are not automatically pruned.
 
-## Review and deployment
+## Prerequisites and Argo CD installation
 
-Commit these files through a PR. Before syncing with Argo CD, validate against
-the AWS cluster from a checkout of the merged repository:
+Start with a working Kubernetes cluster, kubectl administrator access and a
+NetworkPolicy-capable network plugin. The demonstrated environment uses
+Kubernetes 1.34.5 and Calico on three EC2 nodes. Cluster/node provisioning is
+not automated by this repository.
 
-```bash
-kubectl apply --dry-run=server -f k8s/namespace.yaml
-```
+For a fresh cluster, install the standard Argo CD version used for this setup:
 
-Other resources require the namespace to exist for server validation.
+~~~bash
+kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply --server-side -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.6/manifests/install.yaml
+kubectl -n argocd rollout status deployment/argocd-server --timeout=300s
+kubectl -n argocd get pods
+~~~
 
-The Argo CD Application is defined in `argocd/application.yaml`, outside the
-tracked `k8s/` directory. It uses the dedicated `memory-app` AppProject with
-automatic sync, pruning, and self-healing enabled. Bootstrap the project before
-switching the Application to it. The project permits only this repository,
-the in-cluster destination namespace, and listed resource kinds.
+For temporary access from the same machine, run:
 
-The Namespace kind is a deliberate cluster-scoped exception because `k8s/`
-contains the Namespace manifest. This whitelist restricts kind, not Namespace
-object name; protect repository writes and review namespace changes. The
-AppProject does not reduce the underlying Argo CD controller's cluster RBAC.
-Secrets are not allowed by the project yet and will be addressed in the final step.
+~~~bash
+kubectl -n argocd port-forward svc/argocd-server 8443:443
+~~~
 
-After merging the manifests into `main`, run these commands from the repository
-root on the control-plane node, using a checkout containing the merged files:
+Open https://127.0.0.1:8443. The standard installation uses a self-signed
+certificate. Username: admin. In another terminal, retrieve the initial password:
 
-```bash
-kubectl apply --dry-run=server -f argocd/project.yaml
+~~~bash
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 --decode; echo
+~~~
+
+Change the initial password after login. On a remote EC2 node, port forwarding
+binds that node's loopback address; use an SSH tunnel to access it from your
+computer. The existing deployment has separately configured NodePort access.
+
+Source: [Argo CD installation guide](https://argo-cd.readthedocs.io/en/stable/getting_started/).
+
+## Deploy
+
+Create the [Secret](Secret.md) before merging Deployment references.
+Merge manifests through a PR. From the updated repository on the control-plane
+node, bootstrap the project and Application if not already installed:
+
+~~~bash
 kubectl apply -f argocd/project.yaml
-kubectl apply --dry-run=server -f argocd/application.yaml
 kubectl apply -f argocd/application.yaml
+~~~
+
+Argo CD manages the application resources; do not apply the Deployments manually.
+The Application and AppProject are outside k8s/, so changes to those bootstrap
+files must be applied separately.
+
+## Verify
+
+~~~bash
 kubectl -n argocd get application memory-app
-```
-
-In the Argo CD UI, open `memory-app` and review its resources and sync status.
-The Application enables namespace creation. Do not manually apply the
-Deployments; Argo CD manages deployment automatically. Pruning deletes tracked
-resources removed from Git, and self-healing corrects live drift from Git.
-Because the Application manifest is outside the tracked `k8s/` directory, apply
-changes to `argocd/application.yaml` explicitly; this Application does not manage itself.
-
-After syncing:
-
-```bash
-kubectl -n memory-app get deployments,pods,svc -o wide
+kubectl -n memory-app get deployments,pods,svc
 kubectl -n memory-app get endpointslices -l kubernetes.io/service-name=memory-app
-kubectl -n memory-app get pods -w
-kubectl -n memory-app get pods -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{range .status.containerStatuses[*]}{.restartCount}{"\t"}{.lastState.terminated.reason}{end}{"\n"}{end}'
-```
+kubectl -n memory-app logs deployment/memory-app-py312 -c validate-runtime
+~~~
 
-For a temporary health check, run the port forward in a separate terminal:
+Expect Synced in Argo CD. Health can change as the intentional OOM failures
+cause restarts. The init log should say **Runtime configuration and Secret validated**
+after the Secret changes are deployed.
 
-```bash
+For temporary local access, run:
+
+~~~bash
 kubectl -n memory-app port-forward svc/memory-app 8081:80
-```
+~~~
 
-Then call `curl http://127.0.0.1:8081/healthcheck`. Port forwarding reaches a
-selected Pod and does not validate Service load distribution across all Pods.
-
-## Remaining task requirements
-
-Secret design and implementation are deliberately deferred until after Task 3.
-The runtime ConfigMap and BusyBox initContainers are configured without changing
-application source code or adding test files.
-Support RBAC and the dedicated AppProject are configured locally; validate their
-behavior after GitOps sync.
-Automatic image-tag update PRs are
-configured in the release workflow; GitHub permissions and end-to-end operation
-must be verified after merging the workflow changes.
-This initial deployment does not complete Task 2.
+From the same machine, open http://127.0.0.1:8081/healthcheck.
+Port forwarding reaches a selected Pod; it does not test Service load balancing
+or NetworkPolicy enforcement.
 

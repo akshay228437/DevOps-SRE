@@ -1,62 +1,38 @@
-# Task 2: Initial application NetworkPolicy
+# Task 2: NetworkPolicy
 
-`k8s/networkpolicy.yaml` applies to Pods labelled
-`app.kubernetes.io/name: memory-app` in the `memory-app` namespace.
-It permits incoming TCP 8080 from Pods in the same namespace. Other incoming
-Pod traffic is denied unless another policy adds an allowance. Policies are
-additive: this file cannot override an allowance in another applicable policy.
+The **allow-namespace-http** policy selects application Pods in memory-app.
 
-Only Ingress is selected, so this policy does not restrict outgoing traffic.
-The application Service remains ClusterIP on port 80, targeting Pod port 8080.
-The policy uses the Pod destination port, not the Service port.
+- Allows incoming TCP 8080 from Pods in the same namespace.
+- Blocks other incoming Pod traffic unless another applicable policy allows it.
+- Does not restrict outgoing traffic.
 
-Calico must be healthy and enforcing Kubernetes NetworkPolicies. Standard
-NetworkPolicy has node-traffic exceptions; this is not a firewall against every
-host-originated connection. Kubelet probes are not deliberately blocked by this
-policy. Argo CD's NodePort Service is in another namespace and is unchanged.
-Port-forward uses the API/kubelet path and is not an appropriate test of Pod
-network isolation.
+The Service exposes port 80, but the policy uses the destination container port,
+8080. Calico enforces the policy. Kubernetes has node-traffic exceptions;
+port forwarding is not a test of Pod isolation.
 
-This initial policy trusts all client Pods in `memory-app`; namespace write
-access therefore remains a trust boundary. Tighten client labels if needed.
-Before Task 3 introduces health-check monitoring from a separate namespace,
-add an explicit allowance for the selected monitoring Pods on TCP 8080.
-Node-based log collection and cluster metrics have separate network paths.
+Prometheus collects Pod metrics through Kubernetes components. Alloy collects
+logs through the Kubernetes API. Neither requires direct access to the app's
+HTTP endpoint. A future HTTP probe from monitoring would need an explicit
+NetworkPolicy allowance.
 
-## Deployment and verification
+## Verify
 
-Merge the policy through a PR and allow Argo CD to sync. On the control-plane
-node, inspect its interpretation:
-
-```bash
-kubectl -n memory-app get networkpolicy
+~~~bash
 kubectl -n memory-app describe networkpolicy allow-namespace-http
-```
 
-Test an allowed request from an existing application Pod (no extra Pod or quota
-usage is needed). This runs a short HTTP client, not another leaking process:
+# Allowed: request from an application Pod.
+kubectl -n memory-app exec deployment/memory-app-py312 -c memory-app -- python -c 'import urllib.request; print(urllib.request.urlopen("http://memory-app/healthcheck", timeout=5).read().decode())'
+~~~
 
-```bash
-kubectl -n memory-app exec deployment/memory-app-py312 -- python -c 'import urllib.request; print(urllib.request.urlopen("http://memory-app/healthcheck", timeout=5).read().decode())'
-```
+Expect the healthy JSON response. Run while the application is ready because
+its deliberate OOM restarts can also interrupt requests.
 
-Expect the healthy JSON response. Run while the client and Service backends are
-ready; OOM restarts can independently interrupt connections.
+Test a blocked request from a temporary Pod in default:
 
-For a blocked request from another namespace, obtain the existing application's
-image and start a short-lived client in `default`:
-
-```bash
+~~~bash
 IMAGE=$(kubectl -n memory-app get deployment memory-app-py312 -o jsonpath='{.spec.template.spec.containers[0].image}')
 kubectl -n default run memory-app-netcheck --image="$IMAGE" --restart=Never --attach --rm --overrides='{"spec":{"automountServiceAccountToken":false}}' --command -- python -c 'import urllib.request; print(urllib.request.urlopen("http://memory-app.memory-app.svc.cluster.local/healthcheck", timeout=5).read().decode())'
-```
+~~~
 
-Expect a connection timeout, not a healthy response. DNS resolution errors,
-image pull errors, Pod admission failures, or an unavailable application do not
-prove policy enforcement. Check the allowed request first. The client uses
-ordinary Pod networking, not host networking. If interrupted before cleanup,
-remove only the test Pod with `kubectl -n default delete pod memory-app-netcheck`.
-Other policies or quotas in `default` may need to be accounted for in your cluster.
-
-These are verification instructions, not results. Local manifest rendering
-does not establish network enforcement; verify on the AWS cluster after sync.
+Expect a timeout. Confirm the allowed request works first: DNS failures, image
+pull failures and an unavailable backend do not prove policy enforcement.
