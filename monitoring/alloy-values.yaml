@@ -1,0 +1,64 @@
+# grafana/alloy chart 1.15.0; release: alloy, namespace: monitoring.
+controller:
+  type: deployment
+  replicas: 1
+
+crds:
+  create: false
+
+rbac:
+  create: true
+  namespaces: [memory-app]
+  rules:
+    - apiGroups: [""]
+      resources: [pods]
+      verbs: [get, list, watch]
+    - apiGroups: [""]
+      resources: [pods/log]
+      verbs: [get]
+
+alloy:
+  enableReporting: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+  configMap:
+    content: |
+      discovery.kubernetes "app_pods" {
+        role = "pod"
+        namespaces {
+          names = ["memory-app"]
+        }
+      }
+
+      discovery.relabel "app_logs" {
+        targets = discovery.kubernetes.app_pods.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+      }
+
+      loki.source.kubernetes "app_logs" {
+        targets    = discovery.relabel.app_logs.output
+        forward_to = [loki.write.local.receiver]
+      }
+
+      loki.write "local" {
+        endpoint {
+          url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
+        }
+      }

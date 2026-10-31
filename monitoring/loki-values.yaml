@@ -1,0 +1,74 @@
+# grafana-community/loki chart 20.2.0; release: loki, namespace: monitoring.
+deploymentMode: Monolithic
+
+loki:
+  # Internal ClusterIP access only; Grafana and Alloy use the gateway.
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+  limits_config:
+    retention_period: 48h
+    ingestion_rate_mb: 2
+    ingestion_burst_size_mb: 4
+  compactor:
+    working_directory: /var/loki/compactor
+    retention_enabled: true
+    delete_request_store: filesystem
+
+singleBinary:
+  replicas: 1
+  sidecar: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  persistence:
+    enabled: true
+    storageClass: local-path
+    size: 3Gi
+    enableStatefulSetAutoDeletePVC: false
+
+gateway:
+  enabled: true
+  metrics:
+    enabled: false
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# Keep the assignment installation small.
+sidecar:
+  rules:
+    enabled: false
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+lokiCanary:
+  enabled: false
+test:
+  enabled: false
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
