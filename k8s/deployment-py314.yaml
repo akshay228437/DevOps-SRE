@@ -52,10 +52,17 @@ spec:
             - |
               test "$PYTHONUNBUFFERED" = "1"
               test "$PYTHONDONTWRITEBYTECODE" = "1"
-              echo "Runtime configuration validated"
+              test -n "$APP_TOKEN"
+              echo "Runtime configuration and Secret validated"
           envFrom:
             - configMapRef:
                 name: memory-app-runtime
+          env:
+            - name: APP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: memory-app-credentials
+                  key: APP_TOKEN
           resources:
             requests:
               cpu: 25m
@@ -80,6 +87,12 @@ spec:
           envFrom:
             - configMapRef:
                 name: memory-app-runtime
+          env:
+            - name: APP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: memory-app-credentials
+                  key: APP_TOKEN
           resources:
             requests:
               cpu: 100m

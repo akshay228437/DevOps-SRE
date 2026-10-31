@@ -1,40 +1,29 @@
-# Task 2: Read-only support group
+# Task 2: Support RBAC
 
-`k8s/rbac.yaml` defines a Role and RoleBinding in `memory-app`:
+The **memory-app-support** Role allows reading Pods, logs, Services, events,
+Deployments, ReplicaSets and EndpointSlices in memory-app.
 
-- The Role permits get/list/watch on Pods, Services, events, Deployments,
-  ReplicaSets, and EndpointSlices, plus get on Pod logs.
-- The RoleBinding grants these permissions to the group `memory-app-support`.
-- It grants no Secret access, changes, exec, or port forwarding.
-- It does not bind to the application ServiceAccount. Only one custom
-  ServiceAccount remains, with token mounting disabled.
+Its RoleBinding grants access to the **memory-app-support** group.
+It does not grant Secret access, resource changes, exec or port forwarding.
+It is separate from the application's ServiceAccount.
 
-The group name is the intended support identity. Creating a RoleBinding does not
-create people, passwords, group membership, or an authentication integration.
-Until the cluster authenticator supplies this group for real users, the binding
-has no real support-user login attached. Do not describe that integration as done.
+A RoleBinding does not create users or group membership. Real support logins
+require the cluster's authentication system to supply this group.
 
-Namespace-scoped logs may contain sensitive data; read-only does not imply that
-all readable content is public. Existing administrator permissions remain broader
-and are not reduced by this binding.
+## Verify
 
-## Verify authorization after GitOps sync
+Run with administrator impersonation permissions:
 
-Using administrator credentials with user/group impersonation permissions:
-
-```bash
-kubectl -n memory-app get role,rolebinding
-
-# Expected yes
+~~~bash
+# Expected: yes
 kubectl auth can-i list pods -n memory-app --as=support-check --as-group=memory-app-support
 kubectl auth can-i get pods --subresource=log -n memory-app --as=support-check --as-group=memory-app-support
 
-# Expected no
+# Expected: no
 kubectl auth can-i get secrets -n memory-app --as=support-check --as-group=memory-app-support
 kubectl auth can-i delete pods -n memory-app --as=support-check --as-group=memory-app-support
 kubectl auth can-i list pods -n kube-system --as=support-check --as-group=memory-app-support
-kubectl auth can-i list pods -n memory-app --as=system:serviceaccount:memory-app:memory-app
-```
+~~~
 
-These checks test the authorization rules. They do not create or log in a user.
-Investigate any unexpected permissions from other bindings.
+These commands check authorization; they do not log in a real support user.
+Other bindings can grant additional permissions.

@@ -9,7 +9,8 @@ Package the Python application in a small container that runs as a non-root user
 Place `Dockerfile` in the project root, beside `readme.md`.
 
 ```dockerfile
-FROM python:3.12-alpine
+ARG PYTHON_VERSION=3.12
+FROM python:${PYTHON_VERSION}-alpine
 
 WORKDIR /app
 
@@ -22,6 +23,9 @@ USER 10001:10001
 
 EXPOSE 8080
 
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD ["python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthcheck', timeout=2).status == 200 else 1)"]
+
 CMD ["python", "app.py"]
 ```
 
@@ -33,6 +37,13 @@ CMD ["python", "app.py"]
 - Copied only the application code into the image.
 - Created a non-root user with UID and GID `10001` using Alpine’s `addgroup` and `adduser` commands.
 - Documented port `8080` and configured Python as the startup process.
+- Added a Docker health check using Python's standard library to call
+  `/healthcheck` every 30 seconds, with a 2-second HTTP timeout, a 3-second
+  command timeout, a 10-second startup grace period and three consecutive
+  failures before marking the running container unhealthy. HTTP 200 succeeds;
+  other responses or connection errors fail. No curl package is needed.
+- Docker health status does not restart an unhealthy container by itself.
+  Kubernetes uses the probes in the Deployments rather than this image health check.
 
 ## Build and Run
 
@@ -54,6 +65,15 @@ Invoke-RestMethod http://localhost:8080/healthcheck
 ```
 
 Expected response: `status` is `healthy`.
+
+After the first successful Docker health check, inspect its status:
+
+```powershell
+docker inspect memory-app-check --format '{{.State.Health.Status}}'
+```
+
+Expected while the app is serving: `healthy`. Immediately after startup it may
+show `starting`. Rebuild the image to include Dockerfile health-check changes.
 
 Check logs and the runtime user:
 
@@ -94,6 +114,8 @@ Review the scan output for vulnerabilities or scanner errors. Remove the exporte
 Remove-Item memory-app.tar
 ```
 
-## Validation Status
+## Verification note
 
-The local Dockerfile uses Alpine. Successful build, health check, non-root execution, OOM termination, and vulnerability scan results remain to be confirmed from command output.
+Alpine images were published and deployed through the pipeline. The intentional
+OOM behavior was observed on Kubernetes. The newly added Docker HEALTHCHECK
+still needs a rebuilt image and local Docker health-status verification.
